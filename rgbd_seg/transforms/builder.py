@@ -6,6 +6,7 @@ from .registry import TRANSFORMS
 
 def build_transform(cfgs):
     tfs = []
+    if cfgs is None: return None
     for cfg in cfgs:
         if TRANSFORMS.get(cfg['type']):
             tf = build_from_cfg(cfg, TRANSFORMS)

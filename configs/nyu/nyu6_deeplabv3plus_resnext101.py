@@ -1,28 +1,31 @@
 import cv2
 
 # 1. configuration for inference
-nclasses = 13  # 40 or 13
+nclasses = 6  # 40 or 13
 ignore_label = 255
 #   official_origin: official origin,
 #   blank_crop: croped blank padding,
 #   official_crop: [h_range=(45, 471), w_range=(41, 601)] -> (427, 561): official cropping to get best depth ,
-#   depth_pred_crop: 640*480 -> dowmsample(320, 240) -> crop(304, 228) -> upsample(640, 480)
-data_crop_types = {'official_origin': dict(type='official_origin', padding_size=(480, 640)),
-                   'blank_crop': dict(type='blank_crop', center_crop_size=(464, 624), padding_size=(464, 624)),
-                   'official_crop': dict(type='official_crop', h_range=(45, 471), w_range=(41, 601),
-                                         padding_size=(427, 561)),
-                   'depth_pred_crop': dict(type='depth_pred_crop', downsample=(240, 320), center_crop_size=(228, 304),
-                                           upsample=(480, 640), padding_size=(480, 640))}
+#   depth_pred_crop: 640*512 -> dowmsample(320, 240) -> crop(304, 228) -> upsample(640, 480)
+data_crop_types = {'official_origin': dict(type='official_origin', padding_size=(512, 640)),
+                   'official_origin_val': dict(type='official_origin_val', padding_size=(1024, 1280)),
+                   'blank_crop': dict(type='blank_crop', center_crop_size=(512, 640), padding_size=(512, 640)),
+                   'official_crop': dict(type='official_crop', h_range=(0, 512), w_range=(0, 640),
+                                         padding_size=(512, 640)),
+                   'depth_pred_crop': dict(type='depth_pred_crop', downsample=(512, 640), center_crop_size=(510, 638),
+                                           upsample=(512, 640), padding_size=(512, 640))}
 
 crop_paras = data_crop_types['official_origin']
+crop_paras_val = data_crop_types['official_origin_val']
 size_h, size_w = crop_paras['padding_size']
-batch_size_per_gpu = 4
+batch_size_per_gpu = 8
+batch_size_per_gpu_val = 4
 data_channels = ['rgb', 'depth']  # ['rgb', 'hha', 'depth']
 image_pad_value = ()
 norm_mean = ()
 norm_std = ()
 if 'rgb' in data_channels:
-    image_pad_value += (123.675, 116.280, 103.530)      # when using pre-trained models (ImageNet mean)
+    image_pad_value += (123.675, 116.280, 103.530)  # when using pre-trained models (ImageNet mean)
     # norm_mean += (0.0, 0.0, 0.0)
     # norm_std += (1.0, 1.0, 1.0)
     norm_mean += (0.485, 0.456, 0.406)
@@ -34,25 +37,22 @@ if 'hha' in data_channels:
     norm_mean += (0.485, 0.456, 0.406)
     norm_std += (0.229, 0.224, 0.225)
 if 'depth' in data_channels:
-    image_pad_value += (0.0, )
-    norm_mean += (0.0, )
-    norm_std += (1.0, )
+    image_pad_value += (0.0,)
+    norm_mean += (0.0,)
+    norm_std += (1.0,)
 
 # img_norm_cfg = dict(mean=norm_mean,
 #                     std=norm_std,
 #                     max_pixel_value=255.0)
-conv_cfg = dict(type='ShapeConv')    # Conv, ShapeConv
-norm_cfg = dict(type='BN')      # 'FRN', 'BN', 'SyncBN', 'GN'
-act_cfg = dict(type='Relu', inplace=True)    # Relu, Tlu
+conv_cfg = dict(type='ShapeConv')  # Conv, ShapeConv
+norm_cfg = dict(type='BN')  # 'FRN', 'BN', 'SyncBN', 'GN'
+act_cfg = dict(type='Relu', inplace=True)  # Relu, Tlu
 multi_label = False
 
 inference = dict(
     gpu_id='0',
     multi_label=multi_label,
     transforms=[
-        dict(type='PadIfNeeded', min_height=size_h, min_width=size_w,
-             value=image_pad_value, mask_value=ignore_label),
-        # dict(type='Normalize', **img_norm_cfg),
         dict(type='ToTensor'),
     ],
     model=dict(
@@ -60,7 +60,7 @@ inference = dict(
         encoder=dict(
             backbone=dict(
                 type='ResNet',
-                arch='resnext101_32x8d',    # resnext101_32x8d, resnext50_32x4d, resnet152, resnet101, resnet50
+                arch='resnext101_32x8d',  # resnext101_32x8d, resnext50_32x4d, resnet152, resnet101, resnet50
                 replace_stride_with_dilation=[False, False, True],
                 multi_grid=[1, 2, 4],
                 conv_cfg=conv_cfg,
@@ -123,7 +123,7 @@ inference = dict(
             num_convs=2,
             upsample=dict(
                 type='Upsample',
-                size=(size_h, size_w),
+                size=(512, 640),
                 mode='bilinear',
                 align_corners=True,
             ),
@@ -132,9 +132,9 @@ inference = dict(
 )
 
 # 2. configuration for train/test
-root_workdir = '/home/imag2/IMAG2_DL/get3d/ShapeConv'
+root_workdir = "/mnt/HDD_4T/nyu_v2/output/"
 dataset_type = 'NYUV2Dataset'
-dataset_root = '/mnt/HDD_4T/datas_ENDOVIS/nyu_v2_original'
+dataset_root = '/mnt/HDD_4T/nyu_v2'
 
 common = dict(
     seed=0,
@@ -152,7 +152,6 @@ common = dict(
         dict(type='MIoU', num_classes=nclasses, average='frequency_weighted'),
         dict(type='Accuracy', num_classes=nclasses, average='pixel'),
         dict(type='Accuracy', num_classes=nclasses, average='class'),
-        # dict(type='TrimapAccuracy', num_classes=nclasses, average='pixel', trimap_size=4, save_dir=root_workdir + "/trimap"),
     ],
     dist_params=dict(backend='nccl')
 )
@@ -191,7 +190,7 @@ test = dict(
 )
 
 ## 2.2 configuration for train
-max_epochs = 800
+max_epochs = 20
 
 train = dict(
     data=dict(
@@ -200,19 +199,16 @@ train = dict(
                 type=dataset_type,
                 root=dataset_root,
                 classes=nclasses,
-                crop_paras=crop_paras,
-                imglist_name='train.txt',
+                crop_paras=crop_paras_val,
+                imglist_name='train_val4.txt',
                 channels=data_channels,
                 multi_label=multi_label,
             ),
+            transforms_rgb=[
+                dict(type='RandomBrightnessContrast'),
+            ],
             transforms=[
-                dict(type='RandomScale', scale_limit=(0.5, 2), scale_step=0.25,
-                     interpolation=cv2.INTER_LINEAR),
-                dict(type='PadIfNeeded', min_height=size_h, min_width=size_w,
-                     value=image_pad_value, mask_value=ignore_label),
-                dict(type='RandomCrop', height=size_h, width=size_w),
                 dict(type='HorizontalFlip', p=0.5),
-                # dict(type='Normalize', **img_norm_cfg),
                 dict(type='ToTensor'),
             ],
             sampler=dict(
@@ -233,17 +229,20 @@ train = dict(
                 root=dataset_root,
                 classes=nclasses,
                 crop_paras=crop_paras,
-                imglist_name='test.txt',
+                imglist_name='val_no4.txt',
                 channels=data_channels,
                 multi_label=multi_label,
             ),
-            transforms=inference['transforms'],
+            transforms_rgb=None,
+            transforms=[
+                dict(type='ToTensor'),
+            ],
             sampler=dict(
                 type='DefaultSampler',
             ),
             dataloader=dict(
                 type='DataLoader',
-                samples_per_gpu=batch_size_per_gpu,
+                samples_per_gpu=batch_size_per_gpu_val,
                 workers_per_gpu=2,
                 shuffle=False,
                 drop_last=False,
@@ -252,12 +251,12 @@ train = dict(
         ),
     ),
     resume=None,
-    criterion=dict(type='CrossEntropyLoss', ignore_index=ignore_label),
-    optimizer=dict(type='SGD', lr=0.007, momentum=0.9, weight_decay=0.0001),
-    lr_scheduler=dict(type='PolyLR', max_epochs=max_epochs, end_lr=0.002),
+    criterion=dict(type='GDL_CrossEntropy', ignore_label=ignore_label),
+    optimizer=dict(type='Adam', lr=0.0001, betas=(0.9, 0.999), eps=1e-8, weight_decay=0.0001),
+    lr_scheduler=dict(type='CosinusLR', warm_up=2, power=0.00001, max_epochs=max_epochs, end_lr=10),
     max_epochs=max_epochs,
-    trainval_ratio=10,
+    trainval_ratio=1,
     log_interval=10,
-    snapshot_interval=1000,
-    save_best=True,
+    snapshot_interval=1,
+    save_best=False,
 )

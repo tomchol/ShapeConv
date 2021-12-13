@@ -33,6 +33,22 @@ class FactorScale(DualTransform):
 
 
 @TRANSFORMS.register_module
+class RamdomContrast(DualTransform):
+    def __init__(self, inter=[0.8, 1], interpolation=cv2.INTER_LINEAR,
+                 always_apply=False,
+                 p=1.0):
+        super(FactorScale, self).__init__(always_apply, p)
+        self.iner = inter
+        self.interpolation = interpolation
+
+    def apply(self, image, inter=1.0, **params):
+        return F.scale(image, inter, interpolation=self.interpolation)
+
+    def apply_to_mask(self, image, inter=[0.8, 1], **params):
+        return F.scale(image, inter, interpolation=cv2.INTER_NEAREST)
+
+
+@TRANSFORMS.register_module
 class LongestMaxSize(FactorScale):
     def __init__(self, h_max, w_max, interpolation=cv2.INTER_LINEAR,
                  always_apply=False, p=1.0):

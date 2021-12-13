@@ -39,9 +39,10 @@ class OfficialCrop(object):
     """
     def __call__(self, inputs, target_label):
         h, w, _ = inputs.shape
-        assert h > 471 and w > 601, "inputs height must > 417, width > 601"
-        inputs = inputs[45:471 + 1, 41:601 + 1]
-        target_label = target_label[45:471 + 1, 41:601 + 1]
+        h_start = random.randint(0, 511)
+        w_start = random.randint(0, 639)
+        inputs = inputs[h_start:h_start+512, w_start:w_start+640]
+        target_label = target_label[h_start:h_start+512, w_start:w_start+640]
         return inputs, target_label
 
 
@@ -65,15 +66,16 @@ class DepthPredCrop(object):
 
 @DATASETS.register_module
 class NYUV2Dataset(BaseDataset):
-    def __init__(self, root, imglist_name, classes=40, crop_paras=None, channels=None, transform=None,
+    def __init__(self, root, imglist_name, classes=6, crop_paras=None, channels=None, transform=None, transform_rgb=None,
                  multi_label=False):
         if multi_label:
             raise ValueError('multi label training is only '
                              'supported by using COCO data form')
         super().__init__()
         self.transform = transform
+        self.transform_rgb = transform_rgb
         if channels is None:
-            channels = ['rgb', 'hha']
+            channels = ['rgb', 'depth']
         imglist_fp = os.path.join(root, imglist_name)
         self.imglist = self.read_imglist(imglist_fp)
 
@@ -105,7 +107,10 @@ class NYUV2Dataset(BaseDataset):
         if "depth" in self.channels:
             dep_fp = os.path.join(self.root, 'depth', imgname + '.png')
             dep = cv2.imread(dep_fp, cv2.IMREAD_UNCHANGED).astype(np.float32)
-            dep = np.expand_dims(dep, axis=-1)
+            if len(dep.shape) == 3:
+                dep = np.expand_dims(dep[:, :, 0], axis=-1)
+            else:
+                dep = np.expand_dims(dep, axis=-1)
             inputs.append(dep)
         assert 0 < len(self.channels) == len(inputs), \
             "NYU Dataset input channels must be in ['rgb', 'hha', 'depth']"
@@ -113,7 +118,6 @@ class NYUV2Dataset(BaseDataset):
 
         mask_fp = os.path.join(self.root, 'label' + str(self.classes), imgname + '.png')
         mask = cv2.imread(mask_fp, cv2.IMREAD_GRAYSCALE)
-        mask -= 1       # 0->255
 
         return img, mask
 

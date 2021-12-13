@@ -6,7 +6,7 @@ import numpy as np
 from torch.nn import init
 from itertools import repeat
 from torch.nn import functional as F
-from torch._six import container_abcs
+import collections.abc
 from torch._jit_internal import Optional
 from torch.nn.parameter import Parameter
 from torch.nn.modules.module import Module
@@ -145,7 +145,7 @@ class ShapeConv2d(Module):
 
 def _ntuple(n):
     def parse(x):
-        if isinstance(x, container_abcs.Iterable):
+        if isinstance(x, collections.abc.Iterable):
             return x
         return tuple(repeat(x, n))
 

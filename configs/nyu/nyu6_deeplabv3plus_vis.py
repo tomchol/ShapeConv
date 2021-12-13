@@ -1,22 +1,24 @@
 import cv2
 
 # 1. configuration for inference
-nclasses = 13  # 40 or 13
+nclasses = 6  # 40 or 13
 ignore_label = 255
 #   official_origin: official origin,
 #   blank_crop: croped blank padding,
 #   official_crop: [h_range=(45, 471), w_range=(41, 601)] -> (427, 561): official cropping to get best depth ,
-#   depth_pred_crop: 640*480 -> dowmsample(320, 240) -> crop(304, 228) -> upsample(640, 480)
-data_crop_types = {'official_origin': dict(type='official_origin', padding_size=(480, 640)),
-                   'blank_crop': dict(type='blank_crop', center_crop_size=(464, 624), padding_size=(464, 624)),
+#   depth_pred_crop: 640*512 -> dowmsample(320, 240) -> crop(304, 228) -> upsample(640, 480)
+data_crop_types = {'official_origin': dict(type='official_origin', padding_size=(1024, 1280)),
+                   'blank_crop': dict(type='blank_crop', center_crop_size=(496, 624), padding_size=(496, 624)),
                    'official_crop': dict(type='official_crop', h_range=(45, 471), w_range=(41, 601),
                                          padding_size=(427, 561)),
-                   'depth_pred_crop': dict(type='depth_pred_crop', downsample=(240, 320), center_crop_size=(228, 304),
-                                           upsample=(480, 640), padding_size=(480, 640))}
+                   'depth_pred_crop': dict(type='depth_pred_crop', downsample=(512, 640), center_crop_size=(510, 638),
+                                           upsample=(1024, 1280), padding_size=(1024, 1280))}
 
 crop_paras = data_crop_types['official_origin']
+crop_paras_val = data_crop_types['official_origin']
 size_h, size_w = crop_paras['padding_size']
-batch_size_per_gpu = 4
+batch_size_per_gpu = 1
+batch_size_per_gpu_val = 1
 data_channels = ['rgb', 'depth']  # ['rgb', 'hha', 'depth']
 image_pad_value = ()
 norm_mean = ()
@@ -132,9 +134,9 @@ inference = dict(
 )
 
 # 2. configuration for train/test
-root_workdir = '/home/imag2/IMAG2_DL/get3d/ShapeConv'
+root_workdir = '/home/imag2/IMAG2_DL/imag_segmentation/ShapeConv'
 dataset_type = 'NYUV2Dataset'
-dataset_root = '/mnt/HDD_4T/datas_ENDOVIS/nyu_v2_original'
+dataset_root = '/mnt/HDD_4T/nyu_v2'
 
 common = dict(
     seed=0,
@@ -191,7 +193,7 @@ test = dict(
 )
 
 ## 2.2 configuration for train
-max_epochs = 800
+max_epochs = 40
 
 train = dict(
     data=dict(
@@ -232,18 +234,20 @@ train = dict(
                 type=dataset_type,
                 root=dataset_root,
                 classes=nclasses,
-                crop_paras=crop_paras,
-                imglist_name='test.txt',
+                crop_paras=crop_paras_val,
+                imglist_name='val_no4.txt',
                 channels=data_channels,
                 multi_label=multi_label,
             ),
-            transforms=inference['transforms'],
+            transforms=[
+                        dict(type='ToTensor'),
+            ],
             sampler=dict(
                 type='DefaultSampler',
             ),
             dataloader=dict(
                 type='DataLoader',
-                samples_per_gpu=batch_size_per_gpu,
+                samples_per_gpu=batch_size_per_gpu_val,
                 workers_per_gpu=2,
                 shuffle=False,
                 drop_last=False,
@@ -251,12 +255,12 @@ train = dict(
             ),
         ),
     ),
-    resume=None,
+    resume="/mnt/HDD_4T/nyu_v2/output/epoch_20_with_val4.pth",
     criterion=dict(type='CrossEntropyLoss', ignore_index=ignore_label),
-    optimizer=dict(type='SGD', lr=0.007, momentum=0.9, weight_decay=0.0001),
+    optimizer=dict(type='SGD', lr=0.007, momentum=0.9, weight_decay=0.0001),  # Adam
     lr_scheduler=dict(type='PolyLR', max_epochs=max_epochs, end_lr=0.002),
     max_epochs=max_epochs,
-    trainval_ratio=10,
+    trainval_ratio=1,
     log_interval=10,
     snapshot_interval=1000,
     save_best=True,

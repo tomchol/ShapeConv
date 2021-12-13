@@ -83,7 +83,8 @@ class Common:
 
     def _build_dataloader(self, cfg):
         transform = build_transform(cfg['transforms'])
-        dataset = build_dataset(cfg['dataset'], dict(transform=transform))
+        transform_rgb = build_transform(cfg['transforms_rgb'])
+        dataset = build_dataset(cfg['dataset'], dict(transform=transform, transform_rgb=transform_rgb))
 
         shuffle = cfg['dataloader'].pop('shuffle', False)
         sampler = build_sampler(self.distribute,

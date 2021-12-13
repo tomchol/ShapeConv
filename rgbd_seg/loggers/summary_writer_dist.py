@@ -3,7 +3,7 @@ import torch.distributed as dist
 
 
 class SummaryWriterDist():
-    def __init__(self, log_dir=None, comment='', purge_step=None, max_queue=10,
+    def __init__(self, log_dir="/mnt/HDD_4/output/", comment='', purge_step=None, max_queue=10,
                  flush_secs=120, filename_suffix=''):
         if dist.is_available() and dist.is_initialized():
             rank = dist.get_rank()

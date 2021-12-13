@@ -12,6 +12,7 @@ from ..utils import save_checkpoint, gather_tensor, reduce_tensor
 from .inference_runner import InferenceRunner
 from ..loggers import build_summarys_writer
 
+
 class TrainRunner(InferenceRunner):
     def __init__(self, train_cfg, inference_cfg, base_cfg=None):
         super().__init__(inference_cfg, base_cfg)
@@ -36,6 +37,8 @@ class TrainRunner(InferenceRunner):
         self.snapshot_interval = train_cfg.get('snapshot_interval', -1)
         self.save_best = train_cfg.get('save_best', True)
         self.iter_based = hasattr(self.lr_scheduler, '_iter_based')
+        self.classes = ["background_tissue", "instruments", "kidney-parenchyma", "covered-kidney", "clamps",
+                        "small-intestine", "fil"]
 
         assert self.workdir is not None
         assert self.log_interval > 0
@@ -66,6 +69,7 @@ class TrainRunner(InferenceRunner):
         self.logger.info('Epoch {}, start training'.format(self.epoch + 1))
         for idx, (image, mask) in enumerate(self.train_dataloader):
             self.optimizer.zero_grad()
+
             if self.use_gpu:
                 image = image.cuda()
                 mask = mask.cuda()
@@ -75,8 +79,9 @@ class TrainRunner(InferenceRunner):
 
             loss.backward()
             self.optimizer.step()
-
             self.iter += 1
+            if self.iter % 10 == 0:
+                self.summary_writer.add_scalar("loss", loss.item(), self.iter)
 
             with torch.no_grad():
                 output = self.compute(output)
@@ -119,6 +124,7 @@ class TrainRunner(InferenceRunner):
                     mask = mask.cuda()
 
                 output = self.model(image)
+                output = torch.nn.Upsample(scale_factor=2, mode='nearest')(output)
                 output = self.compute(output)
 
                 output = gather_tensor(output)
@@ -150,6 +156,10 @@ class TrainRunner(InferenceRunner):
             for k, v in res.items():
                 if isinstance(v, (int, float)):
                     self.summary_writer.add_scalar("train/{}".format(k), v, self.epoch)
+                else:
+                    for element in range(len(v)):
+                        self.summary_writer.add_scalar("train/{}".format("IoU_" + self.classes[element]),
+                                                       v[element], self.epoch)
             for i, lr in enumerate(self.lr):
                 self.summary_writer.add_scalar("lr{}".format(i), lr, self.epoch)
 
@@ -168,6 +178,10 @@ class TrainRunner(InferenceRunner):
                                 self.save_checkpoint(
                                     self.workdir, 'best_{}.pth'.format(k),
                                     meta=dict(best=self.best))
+                    else:
+                        for element in range(len(v)):
+                            self.summary_writer.add_scalar("val/{}".format("IoU_" + self.classes[element]),
+                                                           v[element], self.epoch)
                 self.logger.info(', '.join(
                     ['Best {}: {}'.format(k, v) for k, v in self.best.items()]))
 
